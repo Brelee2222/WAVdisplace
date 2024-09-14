@@ -6,8 +6,8 @@ public class Main {
         AudioInputStream audio = AudioSystem.getAudioInputStream(new File(args[0]));
         byte[] buffer = audio.readAllBytes();
 
-        double scale = .5F;
-        short addRange = 12700;
+        double scale = .25F;
+        short addRange = 30600;
         short add = addRange;
         int addInterpolate = add;
 
