@@ -7,22 +7,34 @@ public class Main {
         byte[] buffer = audio.readAllBytes();
 
         double scale = .5F;
-        short add = 12700;
+        short addRange = 12700;
+        short add = addRange;
+        int addInterpolate = add;
+
+        int flipStartCooldown = 60000;
+        int flipcooldown = 0;
 
         short prevAvg = 0;
 
         for(int bufferIndex = 0; bufferIndex < buffer.length; bufferIndex += 2) {
             short frame = (short) (((buffer[bufferIndex+1] & 0xff) << 8) | (buffer[bufferIndex] & 0xff));
 
+            addInterpolate = (addInterpolate * 2000 + add) / 2001;
+
             prevAvg = (short) ((prevAvg * 199 + Math.abs(frame)) / 200);
 
+            flipcooldown--;
+
             if(Math.abs(prevAvg) < 10 && Math.abs(frame) < 127) {
-                frame = 0;
-                add *= -1;
+                if(flipcooldown < 0) {
+                    add = (short) ((Math.random() - 0.5) * 2 * addRange);
+//                    frame = add;
+                    flipcooldown = flipStartCooldown;
+                }
             }
 
             frame *= scale;
-            frame += add;
+            frame += addInterpolate;
 //            System.out.println(buffer[bufferIndex]);
             buffer[bufferIndex+1] = (byte) (frame >> 8);
 //            buffer[bufferIndex] *= scale;
