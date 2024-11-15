@@ -4,59 +4,64 @@ import java.io.*;
 public class Main {
     public static void main(String[] args) throws UnsupportedAudioFileException, IOException {
         AudioInputStream audio = AudioSystem.getAudioInputStream(new File(args[0]));
-        float sampleRate = audio.getFormat().getSampleRate();
-        double pulseRate = 0.07;
-        double secondaryRate = 0.04;
 
-//        double x = 0;
+        AudioFormat format = audio.getFormat();
 
-//        double xMaxRate = 60;
+        BufferedInputStream bufferedAudio = new BufferedInputStream(audio, format.getFrameSize());
 
-//        double xRate = xMaxRate;
 
-//        double highPulseRate = 0.00003571428;
-        byte[] buffer = audio.readAllBytes();
+        PipedOutputStream pipedOutputStream = new PipedOutputStream();
+        PipedInputStream pipedInputStream = new PipedInputStream(pipedOutputStream);
 
-        double scale = .25F;
-        short addRange = 15400;
-//        short add = addRange;
-//        int addInterpolate = add;
+        AudioInputStream audioInputStream = new AudioInputStream(pipedInputStream, format, audio.getFrameLength());
 
-        int flipStartCooldown = 60000;
-        int flipcooldown = 0;
+        Frequency[] frequencies = new Frequency[]{
+                new Frequency(format.getFrameRate() / 1.4 * 2 * Math.PI, 4400),
+                new Frequency(format.getFrameRate() / 0.9 * 2 * Math.PI, 2000),
+//                new Frequency(format.getFrameRate() / 80000 * 2 * Math.PI, 1000),
+                new Frequency(format.getFrameRate() / 0.1 * 2 * Math.PI, 4000),
+                new Frequency(format.getFrameRate() / 0.04 * 2 * Math.PI, 11000),
+                new Frequency(format.getFrameRate() / 0.05 * 2 * Math.PI, -11000)
 
-        short prevAvg = 0;
 
-        for(int bufferIndex = 0; bufferIndex < buffer.length; bufferIndex += 2) {
-            short frame = (short) (((buffer[bufferIndex+1] & 0xff) << 8) | (buffer[bufferIndex] & 0xff));
+        };
 
-//            x += xRate;
+        double dim = 2;
+        new Thread(() -> {
+            try {
+                int channels = format.getChannels();
+                int sampleSize = format.getSampleSizeInBits();
 
-//            xRate = (xRate * 2000 + Math.random() * xMaxRate) / 20001;
+                long frameLength = audio.getFrameLength();
+                System.out.println(frameLength);
+                for(long frame = 0; frame < frameLength; frame++) {
+                    for(int channel = 0; channel < channels; channel++) {
+                        int sample = 0;
 
-//            addInterpolate = (addInterpolate * 10000 + add) / 10001;
+                        for(int samplePos = 0; samplePos < sampleSize; samplePos += 8)
+                            sample |= bufferedAudio.read() << samplePos;
 
-            prevAvg = (short) ((prevAvg * 199 + Math.abs(frame)) / 200);
+                        if (sample >> sampleSize - 1 == 1)
+                            sample |= -1 << sampleSize;
 
-//            flipcooldown--;
-//
-//            if(Math.abs(prevAvg) < 10 && Math.abs(frame) < 127) {
-//                if(flipcooldown < 0) {
-//                    add = (short) ((Math.random() - 0.5) * 2 * addRange);
-////                    frame = add;
-//                    flipcooldown = flipStartCooldown;
-//                }
-//            }
+                        sample /= dim;
 
-            frame *= scale;
-//            frame += addInterpolate;
-            frame += (Math.sin(bufferIndex*2/sampleRate/pulseRate) + Math.sin(bufferIndex*2/sampleRate/secondaryRate))/2 * addRange;
-//            System.out.println(buffer[bufferIndex]);
-            buffer[bufferIndex+1] = (byte) (frame >> 8);
-//            buffer[bufferIndex] *= scale;
-            buffer[bufferIndex] = (byte) frame;
+                        for(Frequency frequency : frequencies) {
+                            sample += frequency.getIntensity(frame);
+                        }
+
+                        for(int samplePos = 0; samplePos < sampleSize; samplePos += 8)
+                            pipedOutputStream.write(sample >> samplePos);
+                    }
+                }
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }).start();
+        try {
+            AudioSystem.write(audioInputStream, AudioFileFormat.Type.WAVE, new File(args[1]));
+        } catch (IOException e) {
+            throw new RuntimeException(e);
         }
-        AudioInputStream newAudio = new AudioInputStream(new ByteArrayInputStream(buffer), audio.getFormat(), buffer.length);
-        AudioSystem.write(newAudio, AudioFileFormat.Type.WAVE, new File(args[1]));
     }
 }
